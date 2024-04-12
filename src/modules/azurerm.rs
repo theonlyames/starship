@@ -16,6 +16,7 @@ struct AzureRMContext {
     contexts: HashMap<String, PSAzureContext>,
 }
 
+// TODO: Remove Clone trait
 #[derive(Serialize, Deserialize, Clone)]
 #[serde(rename_all = "PascalCase")]
 struct PSAzureContext {
@@ -44,6 +45,7 @@ where
     D: Deserializer<'de>,
 {
     Deserialize::deserialize(d).map(|x: Option<_>| x.unwrap_or_default())
+    // TODO: None Over Default?
 }
 
 pub fn module<'a>(context: &'a Context) -> Option<Module<'a>> {
@@ -583,6 +585,146 @@ mod tests {
             dir.close()
     }
 
+    #[test]
+    fn active_context_subscription_is_null() -> io::Result<()> {
+        let dir = tempfile::tempdir()?;
+
+        let azurerm_context_contents = r#"{
+            "DefaultContextKey": "Context A",
+            "EnvironmentTable": {},
+            "Contexts": {
+                "Context A": {
+                    "Subscription": null
+                },
+                "Context B": {
+                    "Subscription": {
+                        "Id": "9602c987-ef4d-4fe9-befb-c89158c8ad20",
+                        "Name": "Subscription 1",
+                        "State": "Enabled",
+                        "ExtendedProperties": {
+                            "AuthorizationSource": "RoleBased",
+                            "HomeTenant": "8cf684f2-bc34-4b60-b75d-a75ab47ee27b",
+                            "Environment": "AzureCloud",
+                            "Tenants": "8cf684f2-bc34-4b60-b75d-a75ab47ee27b",
+                            "Account": "user@domain.com"
+                        }
+                    },
+                    "VersionProfile": null,
+                    "TokenCache": {
+                        "CacheData": null
+                    },
+                    "ExtendedProperties": {}
+                },
+                "Context C": {
+                    "Subscription": {
+                        "Id": "9602c987-ef4d-4fe9-befb-c89158c8ad20",
+                        "Name": "VeryLongSubscriptionName",
+                        "State": "Enabled",
+                        "ExtendedProperties": {
+                            "AuthorizationSource": "RoleBased",
+                            "HomeTenant": "8cf684f2-bc34-4b60-b75d-a75ab47ee27b",
+                            "Environment": "AzureCloud",
+                            "Tenants": "8cf684f2-bc34-4b60-b75d-a75ab47ee27b",
+                            "Account": "user@domain.com"
+                        }
+                    },
+                    "VersionProfile": null,
+                    "TokenCache": {
+                        "CacheData": null
+                    },
+                    "ExtendedProperties": {}
+                }
+            },
+            "ExtendedProperties": {}
+        }"#;
+
+            generate_test_config(&dir, azurerm_context_contents)?;
+            let dir_path = &dir.path().to_string_lossy();
+            let actual = ModuleRenderer::new("azurerm")
+                .config(toml::toml! {
+                    [azurerm]
+                    format = "on [$symbol($subscription:$username)]($style)"
+                    disabled = false
+                })
+                .env("AZURE_CONFIG_DIR", dir_path.as_ref())
+                .collect();
+            let expected = Some(format!(
+                "on {}",
+                Color::Blue.bold().paint("󰠅 vlsn:user@domain.com")
+            ));
+            assert_eq!(actual, expected);
+            dir.close()
+    }
+
+    #[test]
+    fn inactive_context_subscription_is_null() -> io::Result<()> {
+        let dir = tempfile::tempdir()?;
+
+        let azurerm_context_contents = r#"{
+            "DefaultContextKey": "Context B",
+            "EnvironmentTable": {},
+            "Contexts": {
+                "Context A": {
+                    "Subscription": null
+                },
+                "Context B": {
+                    "Subscription": {
+                        "Id": "9602c987-ef4d-4fe9-befb-c89158c8ad20",
+                        "Name": "Subscription 1",
+                        "State": "Enabled",
+                        "ExtendedProperties": {
+                            "AuthorizationSource": "RoleBased",
+                            "HomeTenant": "8cf684f2-bc34-4b60-b75d-a75ab47ee27b",
+                            "Environment": "AzureCloud",
+                            "Tenants": "8cf684f2-bc34-4b60-b75d-a75ab47ee27b",
+                            "Account": "user@domain.com"
+                        }
+                    },
+                    "VersionProfile": null,
+                    "TokenCache": {
+                        "CacheData": null
+                    },
+                    "ExtendedProperties": {}
+                },
+                "Context C": {
+                    "Subscription": {
+                        "Id": "9602c987-ef4d-4fe9-befb-c89158c8ad20",
+                        "Name": "VeryLongSubscriptionName",
+                        "State": "Enabled",
+                        "ExtendedProperties": {
+                            "AuthorizationSource": "RoleBased",
+                            "HomeTenant": "8cf684f2-bc34-4b60-b75d-a75ab47ee27b",
+                            "Environment": "AzureCloud",
+                            "Tenants": "8cf684f2-bc34-4b60-b75d-a75ab47ee27b",
+                            "Account": "user@domain.com"
+                        }
+                    },
+                    "VersionProfile": null,
+                    "TokenCache": {
+                        "CacheData": null
+                    },
+                    "ExtendedProperties": {}
+                }
+            },
+            "ExtendedProperties": {}
+        }"#;
+
+            generate_test_config(&dir, azurerm_context_contents)?;
+            let dir_path = &dir.path().to_string_lossy();
+            let actual = ModuleRenderer::new("azurerm")
+                .config(toml::toml! {
+                    [azurerm]
+                    disabled = false
+                })
+                .env("AZURE_CONFIG_DIR", dir_path.as_ref())
+                .collect();
+            let expected = Some(format!(
+                "on {} ",
+                Color::Blue.bold().paint("󰠅 Subscription 1")
+            ));
+            assert_eq!(actual, expected);
+            dir.close()
+    }
 
     #[test]
     fn files_missing() -> io::Result<()> {
