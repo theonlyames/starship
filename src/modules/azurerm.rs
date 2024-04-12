@@ -167,42 +167,72 @@ mod tests {
     }
 
     #[test]
-    fn account_id_empty() -> io::Result<()> {
+    fn subscription_set_correctly() -> io::Result<()> {
         let dir = tempfile::tempdir()?;
 
         let azurerm_context_contents = r#"{
-            "DefaultContextKey": "SubscriptionA (ed85905b-8c3f-4d11-bf32-2fa9c579cba8) - 52b2e9cc-600c-4f1c-86c6-3878df1b6b7d - ",
+            "DefaultContextKey": "Subscription 1",
             "EnvironmentTable": {},
             "Contexts": {
-              "SubscriptionA (ed85905b-8c3f-4d11-bf32-2fa9c579cba8) - 52b2e9cc-600c-4f1c-86c6-3878df1b6b7d - ": {
-                "Account": {
-                  "Id": "",
-                  "Credential": null,
-                  "Type": "User",
-                  "TenantMap": {},
-                  "ExtendedProperties": {
-                    "Tenants": "52b2e9cc-600c-4f1c-86c6-3878df1b6b7d",
-                    "HomeAccountId": "300f616c-5fbf-441d-97c2-3ea4827e107f.52b2e9cc-600c-4f1c-86c6-3878df1b6b7d",
-                    "Subscriptions": "ed85905b-8c3f-4d11-bf32-2fa9c579cba8"
-                  }
-                },
-                "Tenant": {
-                  "Id": "52b2e9cc-600c-4f1c-86c6-3878df1b6b7d",
-                  "Directory": null,
-                  "IsHome": true,
-                  "ExtendedProperties": {}
-                },
+                "Subscription 1A": {
+                    "Subscription": {
+                        "Id": "9602c987-ef4d-4fe9-befb-c89158c8ad20",
+                        "Name" "Subscription 1"
+                        "State": "Enabled",
+                        "ExtendedProperties": {
+                            "AuthorizationSource": "RoleBased",
+                            "HomeTenant": "8cf684f2-bc34-4b60-b75d-a75ab47ee27b",
+                            "Environment": "AzureCloud",
+                            "Tenants": "8cf684f2-bc34-4b60-b75d-a75ab47ee27b",
+                            "Account": "user@domain.com"
+                        }
+                    },
+                    "VersionProfile": null,
+                    "TokenCache": {
+                        "CacheData": null
+                    },
+                    "ExtendedProperties": {}
+                }
+            },
+            "ExtendedProperties": {}
+            }"#;
+
+        generate_test_config(&dir, azurerm_context_contents)?;
+        let dir_path = &dir.path().to_string_lossy();
+        let actual = ModuleRenderer::new("azurerm")
+            .config(toml::toml! {
+            [azurerm]
+            disabled = false
+            })
+            .env("AZURE_CONFIG_DIR", dir_path.as_ref())
+            .collect();
+        let expected = Some(format!(
+            "on {} ",
+            Color::Blue.bold().paint("󰠅 Subscription 1")
+        ));
+        assert_eq!(actual, expected);
+        dir.close()
+    }
+
+    #[test]
+    fn user_name_set_correctly() -> io::Result<()> {
+        let dir = tempfile::tempdir()?;
+
+        let azurerm_context_contents = r#"{
+            "DefaultContextKey": "Subscription 1",
+            "EnvironmentTable": {},
+            "Contexts": {
+              "Subscription 1": {
                 "Subscription": {
-                  "Id": "ed85905b-8c3f-4d11-bf32-2fa9c579cba8",
-                  "Name": "SubscriptionA",
+                  "Id": "9602c987-ef4d-4fe9-befb-c89158c8ad20",
+                  "Name": "Subscription 1",
                   "State": "Enabled",
                   "ExtendedProperties": {
-                    "SubscriptionPolices": "",
                     "AuthorizationSource": "RoleBased",
-                    "HomeTenant": "52b2e9cc-600c-4f1c-86c6-3878df1b6b7d",
+                    "HomeTenant": "8cf684f2-bc34-4b60-b75d-a75ab47ee27b",
                     "Environment": "AzureCloud",
-                    "Tenants": "52b2e9cc-600c-4f1c-86c6-3878df1b6b7d",
-                    "Account": ""
+                    "Tenants": "8cf684f2-bc34-4b60-b75d-a75ab47ee27b",
+                    "Account": "user@domain.com"
                   }
                 },
                 "VersionProfile": null,
@@ -221,6 +251,57 @@ mod tests {
         let actual = ModuleRenderer::new("azurerm")
             .config(toml::toml! {
             [azurerm]
+            format = "on [$symbol($username)]($style)"
+            disabled = false
+            })
+            .env("AZURE_CONFIG_DIR", dir_path.as_ref())
+            .collect();
+        let expected = Some(format!(
+            "on {}",
+            Color::Blue.bold().paint("󰠅 user@domain.com")
+        ));
+        assert_eq!(actual, expected);
+        dir.close()
+    }
+
+    #[test]
+    fn account_id_empty() -> io::Result<()> {
+        let dir = tempfile::tempdir()?;
+
+        let azurerm_context_contents = r#"
+        {
+            "DefaultContextKey": "Subscription 1",
+            "EnvironmentTable": {},
+            "Contexts": {
+                "Subscription 1": {
+                "Subscription": {
+                    "Id": "9602c987-ef4d-4fe9-befb-c89158c8ad20",
+                    "Name": "Subscription 1",
+                    "State": "Enabled",
+                    "ExtendedProperties": {
+                        "AuthorizationSource": "RoleBased",
+                        "HomeTenant": "8cf684f2-bc34-4b60-b75d-a75ab47ee27b",
+                        "Environment": "AzureCloud",
+                        "Tenants": "8cf684f2-bc34-4b60-b75d-a75ab47ee27b",
+                        "Account": ""
+                    }
+                },
+                "VersionProfile": null,
+                "TokenCache": {
+                    "CacheData": null
+                },
+                "ExtendedProperties": {}
+                }
+            },
+            "ExtendedProperties": {}
+        }        
+        "#;
+
+        generate_test_config(&dir, azurerm_context_contents)?;
+        let dir_path = &dir.path().to_string_lossy();
+        let actual = ModuleRenderer::new("azurerm")
+            .config(toml::toml! {
+            [azurerm]
             format = "on [$symbol($subscription:$username)]($style)"
             disabled = false
             })
@@ -228,7 +309,7 @@ mod tests {
             .collect();
         let expected = Some(format!(
             "on {}",
-            Color::Blue.bold().paint("󰠅 SubscriptionA:")
+            Color::Blue.bold().paint("󰠅 Subscription 1:")
         ));
         assert_eq!(actual, expected);
         dir.close()
@@ -239,94 +320,31 @@ mod tests {
         let dir = tempfile::tempdir()?;
 
         let azurerm_context_contents = r#"{
-            "DefaultContextKey": "SubscriptionA (ed85905b-8c3f-4d11-bf32-2fa9c579cba8) - 52b2e9cc-600c-4f1c-86c6-3878df1b6b7d - user@domain.com",
+        {
+            "DefaultContextKey": "Subscription 1",
             "EnvironmentTable": {},
             "Contexts": {
-              "SubscriptionA (ed85905b-8c3f-4d11-bf32-2fa9c579cba8) - 52b2e9cc-600c-4f1c-86c6-3878df1b6b7d - user@domain.com": {
-                "Account": {
-                  "Id": "user@domain.com",
-                  "Credential": null,
-                  "Type": "User",
-                  "TenantMap": {},
-                  "ExtendedProperties": {
-                    "Tenants": "52b2e9cc-600c-4f1c-86c6-3878df1b6b7d",
-                    "HomeAccountId": "300f616c-5fbf-441d-97c2-3ea4827e107f.52b2e9cc-600c-4f1c-86c6-3878df1b6b7d",
-                    "Subscriptions": "ed85905b-8c3f-4d11-bf32-2fa9c579cba8"
-                  }
-                },
-                "Tenant": {
-                  "Id": "52b2e9cc-600c-4f1c-86c6-3878df1b6b7d",
-                  "Directory": null,
-                  "IsHome": true,
-                  "ExtendedProperties": {}
-                },
+                "Subscription 1": {
                 "Subscription": {
-                  "Id": "ed85905b-8c3f-4d11-bf32-2fa9c579cba8",
-                  "Name": "SubscriptionA",
-                  "State": "Enabled",
-                  "ExtendedProperties": {
-                    "SubscriptionPolices": "",
-                    "AuthorizationSource": "RoleBased",
-                    "HomeTenant": "52b2e9cc-600c-4f1c-86c6-3878df1b6b7d",
-                    "Environment": "AzureCloud",
-                    "Tenants": "52b2e9cc-600c-4f1c-86c6-3878df1b6b7d",
-                    "Account": "user@domain.com"
-                  }
-                },
-                "Environment": {
-                  "Name": "AzureCloud",
-                  "Type": "Discovered",
-                  "OnPremise": false,
-                  "ActiveDirectoryServiceEndpointResourceId": "https://management.core.windows.net/",
-                  "AdTenant": "Common",
-                  "GalleryUrl": null,
-                  "ManagementPortalUrl": "https://portal.azure.com",
-                  "ServiceManagementUrl": "https://management.core.windows.net/",
-                  "PublishSettingsFileUrl": "https://go.microsoft.com/fwlink/?LinkID=301775",
-                  "ResourceManagerUrl": "https://management.azure.com/",
-                  "SqlDatabaseDnsSuffix": ".database.windows.net",
-                  "StorageEndpointSuffix": "core.windows.net",
-                  "ActiveDirectoryAuthority": "https://login.microsoftonline.com",
-                  "GraphUrl": "https://graph.windows.net/",
-                  "GraphEndpointResourceId": "https://graph.windows.net/",
-                  "TrafficManagerDnsSuffix": "trafficmanager.net",
-                  "AzureKeyVaultDnsSuffix": "vault.azure.net",
-                  "DataLakeEndpointResourceId": "https://datalake.azure.net/",
-                  "AzureDataLakeStoreFileSystemEndpointSuffix": "azuredatalakestore.net",
-                  "AzureDataLakeAnalyticsCatalogAndJobEndpointSuffix": "azuredatalakeanalytics.net",
-                  "AzureKeyVaultServiceEndpointResourceId": "https://vault.azure.net",
-                  "ContainerRegistryEndpointSuffix": "azurecr.io",
-                  "VersionProfiles": [],
-                  "ExtendedProperties": {
-                    "ManagedHsmServiceEndpointResourceId": "https://managedhsm.azure.net",
-                    "ContainerRegistryEndpointResourceId": "https://management.azure.com",
-                    "AzureAppConfigurationEndpointResourceId": "https://azconfig.io",
-                    "AzurePurviewEndpointSuffix": "purview.azure.net",
-                    "ManagedHsmServiceEndpointSuffix": "managedhsm.azure.net",
-                    "MicrosoftGraphUrl": "https://graph.microsoft.com",
-                    "AzureAttestationServiceEndpointSuffix": "attest.azure.net",
-                    "AzureSynapseAnalyticsEndpointSuffix": "dev.azuresynapse.net",
-                    "AzureAnalysisServicesEndpointSuffix": "asazure.windows.net",
-                    "AzureSynapseAnalyticsEndpointResourceId": "https://dev.azuresynapse.net",
-                    "OperationalInsightsEndpointResourceId": "https://api.loganalytics.io",
-                    "AnalysisServicesEndpointResourceId": "https://region.asazure.windows.net",
-                    "AzurePurviewEndpointResourceId": "https://purview.azure.net",
-                    "AzureAppConfigurationEndpointSuffix": "azconfig.io",
-                    "AzureAttestationServiceEndpointResourceId": "https://attest.azure.net",
-                    "MicrosoftGraphEndpointResourceId": "https://graph.microsoft.com/",
-                    "OperationalInsightsEndpoint": "https://api.loganalytics.io/v1"
-                  },
-                  "BatchEndpointResourceId": "https://batch.core.windows.net/"
+                    "Id": "9602c987-ef4d-4fe9-befb-c89158c8ad20",
+                    "State": "Enabled",
+                    "ExtendedProperties": {
+                        "AuthorizationSource": "RoleBased",
+                        "HomeTenant": "8cf684f2-bc34-4b60-b75d-a75ab47ee27b",
+                        "Environment": "AzureCloud",
+                        "Tenants": "8cf684f2-bc34-4b60-b75d-a75ab47ee27b",
+                        "Account": "user@domain.com"
+                    }
                 },
                 "VersionProfile": null,
                 "TokenCache": {
-                  "CacheData": null
+                    "CacheData": null
                 },
                 "ExtendedProperties": {}
-              }
+                }
             },
             "ExtendedProperties": {}
-          }          
+            }        
         "#;
 
         generate_test_config(&dir, azurerm_context_contents)?;
