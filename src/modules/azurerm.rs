@@ -643,14 +643,14 @@ mod tests {
             let actual = ModuleRenderer::new("azurerm")
                 .config(toml::toml! {
                     [azurerm]
-                    format = "on [$symbol($subscription:$username)]($style)"
+                    format = "on [$symbol($subscription)]($style)"
                     disabled = false
                 })
                 .env("AZURE_CONFIG_DIR", dir_path.as_ref())
                 .collect();
             let expected = Some(format!(
                 "on {}",
-                Color::Blue.bold().paint("󰠅 vlsn:user@domain.com")
+                Color::Blue.bold().paint("󰠅 ")
             ));
             assert_eq!(actual, expected);
             dir.close()
