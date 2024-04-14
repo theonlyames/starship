@@ -12,7 +12,7 @@ use crate::formatter::StringFormatter;
 #[serde(rename_all = "PascalCase")]
 struct AzureRMContext {
     default_context_key: String,
-    #[serde(default, skip_serializing_if = "HashMap::is_empty")]
+    #[serde(skip_serializing_if = "HashMap::is_empty")]
     contexts: HashMap<String, PSAzureContext>,
 }
 
@@ -20,32 +20,24 @@ struct AzureRMContext {
 #[derive(Serialize, Deserialize, Clone)]
 #[serde(rename_all = "PascalCase")]
 struct PSAzureContext {
-    #[serde(default, deserialize_with = "parse_azurerm_subscription")]
-    subscription: PSAzureSubscription,
+    // #[serde(deserialize_with = "parse_azurerm_subscription")]
+    subscription: Option<PSAzureSubscription>,
 }
 
-#[derive(Serialize, Deserialize, Clone, Default)]
-#[serde(rename_all = "PascalCase", default)]
+#[derive(Serialize, Deserialize, Clone)]
+#[serde(rename_all = "PascalCase")]
 struct PSAzureSubscription {
     name: String,
     id: String,
     extended_properties: PSAzureSubscriptionProperties
 }
 
-#[derive(Serialize, Deserialize, Clone, Default)]
-#[serde(rename_all = "PascalCase", default)]
+#[derive(Serialize, Deserialize, Clone)]
+#[serde(rename_all = "PascalCase")]
 struct PSAzureSubscriptionProperties {
     environment: String,
     account: String,
     home_tenant: String
-}
-
-fn parse_azurerm_subscription<'de, D>(d: D) -> Result<PSAzureSubscription, D::Error>
-where
-    D: Deserializer<'de>,
-{
-    Deserialize::deserialize(d).map(|x: Option<_>| x.unwrap_or_default())
-    // TODO: None Over Default?
 }
 
 pub fn module<'a>(context: &'a Context) -> Option<Module<'a>> {
@@ -63,8 +55,8 @@ pub fn module<'a>(context: &'a Context) -> Option<Module<'a>> {
         return None;
     }
     let azurerm_context = azurerm_context.unwrap();
-    let subscription = azurerm_context.subscription;
-
+    let subscription = azurerm_context.subscription.unwrap();
+        
     let parsed = StringFormatter::new(config.format).and_then(|formatter| {
         formatter
             .map_meta(|variable, _| match variable {
@@ -109,7 +101,12 @@ fn get_azurerm_context_info(context: &Context) -> Option<PSAzureContext> {
         .get(&azurerm_context_key)?
         .to_owned();
 
-    Some(azurerm_context)
+    if azurerm_context.subscription.is_none() {
+      return None;
+    }
+
+    return Some(azurerm_context);
+    
 }
 
 fn load_azurerm_context(config_path: &PathBuf) -> Option<AzureRMContext> {
@@ -648,10 +645,7 @@ mod tests {
                 })
                 .env("AZURE_CONFIG_DIR", dir_path.as_ref())
                 .collect();
-            let expected = Some(format!(
-                "on {}",
-                Color::Blue.bold().paint("󰠅 ")
-            ));
+            let expected = None;
             assert_eq!(actual, expected);
             dir.close()
     }
